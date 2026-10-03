@@ -45,16 +45,16 @@ CREATE OR REPLACE PACKAGE BODY task_search_pkg AS
         v_term   := '%' || LOWER(NVL(p_search_term, '')) || '%';
         v_offset := (p_page - 1) * p_page_size;
 
-        -- Total count for pagination metadata
+        -- FIX 1: Parenthesised OR; FIX 4: ESCAPE '\' in both LIKE clauses.
         SELECT COUNT(*)
           INTO p_total_count
           FROM tasks
          WHERE archived = 0
-           AND LOWER(title) LIKE v_term
-            OR LOWER(description) LIKE v_term
+           AND (   LOWER(title)       LIKE v_term ESCAPE '\'
+                OR LOWER(description) LIKE v_term ESCAPE '\')
            AND (p_status IS NULL OR status = p_status);
 
-        -- Paginated results using ROWNUM (pre-12c pattern)
+        -- FIX 1: Parenthesised OR; FIX 4: ESCAPE '\'; FIX 1: id DESC tie-breaker.
         OPEN p_results FOR
             SELECT id, title, description, status, priority, assignee, created_at
               FROM (
@@ -64,10 +64,10 @@ CREATE OR REPLACE PACKAGE BODY task_search_pkg AS
                                assignee, created_at
                           FROM tasks
                          WHERE archived = 0
-                           AND LOWER(title) LIKE v_term
-                            OR LOWER(description) LIKE v_term
+                           AND (   LOWER(title)       LIKE v_term ESCAPE '\'
+                                OR LOWER(description) LIKE v_term ESCAPE '\')
                            AND (p_status IS NULL OR status = p_status)
-                         ORDER BY created_at DESC
+                         ORDER BY created_at DESC, id DESC
                     ) t
                    WHERE ROWNUM <= v_offset + p_page_size
               )
